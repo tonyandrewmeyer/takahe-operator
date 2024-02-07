@@ -1,0 +1,123 @@
+# This file configures Charmcraft.
+# See https://juju.is/docs/sdk/charmcraft-config for guidance.
+
+name: takahe-k8s
+type: charm
+title: takahē operator for Kubernetes
+summary: Takahē is an ActivityPub server designed for efficient use on small- to medium-size installations.
+description: |
+  Takahē is an ActivityPub server for small- to medium-size installations, allowing multiple domains on the same infrastructure.
+
+  This charm manages installation and management of a Takahē instance.
+  TODO: Add more details here.
+
+  Takahē can interact with other ActivityPub servers in the 'Fediverse', such as Mastodon,
+  Lemmy, micro.blog, or PeerTube. Takahē is fairly straightforward to install and manage,
+  but this charm simplifies things further, allowing easy deployment and management with
+  Juju, whether on a local Microk8s, a bare metal server, or private or public cloud.
+
+  This charm is intended for use by anyone wishing to manage a Takahē instance, generally
+  for their own private use, with one or more domains.
+
+config:
+  options:
+    main-domain:
+      description: the domain name that will be used for default links (such as in emails). Does not need to be the same as any domain you are hosting user accounts on. Must be provided.
+      type: string
+    media-uri:
+      default: local://
+      description: URI where media should be stored - may be 'local://', 's3://access-key:secret-key@endpoint-url/bucket-name', or 'gcs://bucket-name'
+      type: string
+
+actions:
+  # The wordpress-k8s charm allows deployment with an `initial_settings` config
+  # containing `admin_password`, and has a `get-initial-password` action. Maybe
+  # it would be worth copying that pattern?
+  add-superuser:
+    description: >
+      Add a new superuser account to the instance.
+    params:
+      username:
+        description: Username for the new superuser
+        type: string
+      email:
+        description: Email for the new superuser
+        type: string
+    additionalProperties: false
+    required:
+      - username
+      - email
+  cycle-secret-key:
+    description: >
+      Generate a new internal secret key - this invalidates all sessions.
+      Users will be forced to log in again. This might be useful under security
+      breach circumstances, but should also be done on a regular cadence.
+    additionalProperties: false
+
+bases:
+  - build-on:
+    - name: ubuntu
+      channel: "22.04"
+    run-on:
+    - name: ubuntu
+      channel: "22.04"
+
+peers:
+  takahe-peer:
+    interface: takahē_peers
+
+requires:
+  database:
+    interface: postgresql_client
+    limit: 1
+  ingress:
+    interface: ingress
+    limit: 1
+  log-proxy:
+    interface: loki_push_api
+    optional: true
+
+provides:
+  metrics-endpoint:
+    interface: prometheus_scrape
+  grafana-dashboard:
+    interface: grafana_dashboard
+
+containers:
+  # Both containers use the same image.
+  takahe-web:
+    resource: takahe-image
+    mounts:
+      - storage: media-cache
+        location: /cache/
+      # Only used when configured to use local storage for media (rather than S3/GCS).
+      - storage: local-media
+        location: /media/
+  takahe-background:
+    resource: takahe-image
+    mounts:
+      # Only used when configured to use local storage for media (rather than S3/GCS).
+      - storage: local-media
+        location: /media/
+
+storage:
+  local-media:
+    type: filesystem
+  # TODO: This should be a K8s EmptyDir, how do I specify that?
+  media-cache:
+    type: filesystem
+    minimum-size: 1.0G
+
+# This field populates the Resources tab on Charmhub.
+resources:
+  takahe-image:
+    type: oci-image
+    description: OCI image for the 'takahē' container
+    # The upstream-source field is ignored by Juju. It is included here as a reference
+    # so the integration testing suite knows which image to deploy during testing. This field
+    # is also used by the 'canonical/charming-actions' Github action for automated releasing.
+    upstream-source: jointakahe/takahe:latest
+
+assumes:
+  - juju >= 3.3
+  - k8s-api
