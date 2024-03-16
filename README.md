@@ -34,7 +34,7 @@ for their own private use, with one or more domains.
 
 Note that this charm aims to make installation and management of your Takahē server simple,
 but there are other aspects to running an ActivityPub server that you must handle. In
-particular, supporting your users, moderation, defedeation (if needed), knowing how to
+particular, supporting your users, moderation, defederation (if needed), knowing how to
 handle illegal content, and so on.
 
 ## Other resources
