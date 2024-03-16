@@ -1,4 +1,53 @@
-# Testing tools configuration
+[project]
+name = "takahe-operator"
+version = "0.1dev1"
+description = "Charmed operator for the Takahē service, for use with Juju"
+readme = "README.md"
+license = { file="LICENSE" }
+authors = [
+    {name = "Tony Meyer", email="tony@aotearoa.dev"},
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Natural Language :: English",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Communications",
+]
+dependencies = [
+  "cosl",
+  "ops~=2.11",
+  "pydantic",
+]
+[project.optional-dependencies]
+format = [
+  "ruff",
+]
+integration = [
+  "juju",
+  "pytest",
+  "pytest-operator",
+]
+lint = [
+  "codespell",
+  "ruff",
+]
+static = [
+  "pyright",
+]
+unit = [
+  "coverage[toml]",
+  "ops-scenario",
+  "pytest",
+]
+[project.urls]
+"Homepage" = "https://github.com/tonyadnrewmeyer/takahe-operator"
+"Issues" = "https://github.com/tonyandrewmeyer/takahe-operator/issues"
+"Repository" = "https://github.com/tonyandrewmeyer/takahe-operator"
+"Takahē" = "https://jointakahe.org"
+
 [tool.black]
 line-length = 99
 target-version = ["py38"]
@@ -7,8 +56,28 @@ target-version = ["py38"]
 
 [tool.ruff]
 line-length = 99
-select = ["E", "W", "F", "C", "N", "D", "I001"]
-extend-ignore = [
+target-version = "py311"
+extend-exclude = ["__pycache__", "*.egg_info"]
+
+[tool.ruff.lint]
+select = [
+    # Pyflakes
+    "F",
+    # Pycodestyle
+    "E",
+    "W",
+    # isort
+    "I001",
+    # pep8-naming
+    "N",
+    # flake8-builtins
+    "A",
+    # pyflakes-docstrings
+    "D",
+]
+ignore = [
+    "E501",
+    "D107",
     "D203",
     "D204",
     "D213",
@@ -21,12 +90,7 @@ extend-ignore = [
     "D409",
     "D413",
 ]
-ignore = ["E501", "D107"]
-extend-exclude = ["__pycache__", "*.egg_info"]
 per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
-
-[tool.ruff.mccabe]
-max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
@@ -44,4 +108,11 @@ branch = true
 show_missing = true
 
 [tool.pyright]
-include = ["src/**.py"]
+include = [
+    "src/*.py",
+    "tests/**.py",
+]
+pythonVersion = "3.11"
+pythonPlatform = "All"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
