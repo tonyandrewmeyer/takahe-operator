@@ -63,9 +63,6 @@ juju integrate takahe-k8s traefik-k8s
 * Juju container & images (hangs installing)
 * Secret keys: Invalid secret keys: ['takahē-secret-key']. Keys should be lowercase letters and digits, at least 3 characters long, start with a letter, and not start or end with a hyphen.
 * GitHub repo names.
-
-### Things linting should catch
-
-* Invalid storage definition (really should just validate all of charmcraft.yaml)
+* `pyproject.toml` `project.name`
 
 <!-- You may want to include any contribution/style guidelines in this document>
