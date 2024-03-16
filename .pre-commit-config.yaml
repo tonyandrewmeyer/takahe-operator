@@ -10,7 +10,6 @@ repos:
     -   id: check-ast
     -   id: check-json
     -   id: check-merge-conflict
-    -   id: requirements-txt-fixer
   - repo: https://github.com/asottile/blacken-docs
     rev: v1.12.1
     hooks:
