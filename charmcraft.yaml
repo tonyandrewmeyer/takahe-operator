@@ -26,7 +26,7 @@ config:
       type: string
     media-uri:
       default: local://
-      description: URI where media should be stored - may be 'local://', 's3://access-key:secret-key@endpoint-url/bucket-name', or 'gcs://bucket-name'
+      description: URI where media should be stored - may be 'local://', 'gcs://bucket-name', or 's3://juju-secret-id' (the secret must have `access-key`, `secret-key`, `endpoint`, and `bucket` fields)
       type: string
 
 actions:
@@ -64,7 +64,7 @@ bases:
 
 peers:
   takahe-peer:
-    interface: takahē_peers
+    interface: takahe-peers
 
 requires:
   database:

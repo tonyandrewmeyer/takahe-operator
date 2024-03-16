@@ -7,6 +7,7 @@
 import logging
 import random
 import string
+import typing
 
 import ops
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -107,6 +108,7 @@ class TakahēOperatorCharm(ops.CharmBase):
             relation_name="log-proxy",
         )
         framework.observe(self._log_proxy.on.promtail_digest_error, self._on_promtail_error)
+        self._promtail_error: str | None = None
 
         # Provide grafana dashboards over a relation interface
         self._grafana_dashboards = GrafanaDashboardProvider(
@@ -118,11 +120,11 @@ class TakahēOperatorCharm(ops.CharmBase):
         # TODO: Do I actually need to do anything here?
         logger.info("This app's ingress URL: %s", event.url)
 
-    def _on_promtail_error(self, event):
-        logger.error(event.message)
-        # TODO: This is what the interface docs have, but it won't work with
-        # collect status!
-        self.unit.status = ops.BlockedStatus(event.message)
+    def _on_promtail_error(self, event: ops.EventBase):
+        message = typing.cast(str, event.message)  # type: ignore
+        logger.error("Promtail: %s", message)
+        # We just want to pass this over to collect-status.
+        self._promtail_error = message
 
     @property
     def peers(self):
@@ -133,9 +135,27 @@ class TakahēOperatorCharm(ops.CharmBase):
         # Default to everything is ok.
         event.add_status(ops.ActiveStatus())
 
+        # Did anything come through from promtail?
+        if self._promtail_error:
+            event.add_status(ops.BlockedStatus(self._promtail_error))
+
         # Is the config ok?
         if not self.config["media-uri"].startswith(("local://", "s3://", "gcs://")):
             event.add_status(ops.BlockedStatus("Invalid 'media-uri' config value."))
+        elif self.config["media-uri"].startswith("s3://"):
+            user_secret_id = self.config["media-uri"].split("//")[1]
+            try:
+                s3_access = self.model.get_secret(id=user_secret_id).get_content()
+            except ops.SecretNotFoundError:
+                event.add_status(ops.BlockedStatus("Waiting for S3 user secret"))
+            else:
+                for required_field in ("access-key", "secret-key", "endpoint", "bucket"):
+                    if required_field not in s3_access:
+                        event.add_status(
+                            ops.BlockedStatus(
+                                f"S3 user secret is missing {required_field!r} field"
+                            )
+                        )
         if not self.config.get("main-domain"):
             event.add_status(ops.BlockedStatus("Please set the main domain with `juju config`"))
         elif self.config["main-domain"] == "example.com":
@@ -203,7 +223,6 @@ class TakahēOperatorCharm(ops.CharmBase):
         secret_key = self._generate_secret_key()
         secret = self.unit.add_secret({"takahe-secret-key": secret_key})
         if secret.id is None:
-            # TODO: Can this be tightened up in the ops type hinting?
             logger.warning("Juju secret is missing ID")
             return
         self.peers.data[self.app]["secret-id"] = secret.id
@@ -320,11 +339,10 @@ class TakahēOperatorCharm(ops.CharmBase):
             logger.info("Updated services.")
 
         if update_version:
-            self.unit.set_workload_version(self.workload_version)
+            self.unit.set_workload_version(self.get_workload_version())
 
-    @property
-    def workload_version(self):
-        """The version of Takahē installed in the containers."""
+    def get_workload_version(self):
+        """Get the version of Takahē installed in the containers."""
         logger.debug("Getting the workload version.")
         # This can be done on either container, so use the background service
         # to minimise the impact.
@@ -366,7 +384,7 @@ class TakahēOperatorCharm(ops.CharmBase):
         return f"postgresql://{db_user}:{db_password}@{db_host}/{DB_NAME}?connect_timeout=10"
 
     @property
-    def _takahē_env(self):
+    def _takahē_env(self) -> dict[str, str]:
         # Peer data.
         if not self.peers:
             return {}
@@ -385,11 +403,25 @@ class TakahēOperatorCharm(ops.CharmBase):
         # machine, and not publicly listed on charmhub. I should finish off the
         # exim-operator charm and use that (smtp-relay is postfix).
 
+        media_uri = self.config["media-uri"]
+        if media_uri.startswith("s3://"):
+            user_secret_id = media_uri.split("//")[1]
+            try:
+                s3 = self.model.get_secret(id=user_secret_id).get_content()
+            except ops.SecretNotFoundError:
+                return {}
+            try:
+                media_uri = (
+                    f"s3://{s3['access-key']}:{s3['secret-key']}@{s3['endpoint']}/{s3['bucket']}"
+                )
+            except KeyError:
+                return {}
+
         # Put it all together.
         env = {
             "TAKAHE_DATABASE_SERVER": self.dsn,
             "TAKAHE_SECRET_KEY": takahē_secret["takahe-secret-key"],
-            "TAKAHE_MEDIA_BACKEND": self.config["media-uri"],
+            "TAKAHE_MEDIA_BACKEND": media_uri,
             "TAKAHE_MAIN_DOMAIN": self.config.get("main-domain", ""),
             # "TAKAHE_EMAIL_SERVER": f"smtp://{urllib.parse.quote(smtp_username)}:{urllib.parse.quote(smtp_password)}@{smtp_host}:{smtp_port}/?tls=true",
             "TAKAHE_EMAIL_FROM": f"takahē@{self.config.get('main-domain', '')}",
@@ -399,7 +431,7 @@ class TakahēOperatorCharm(ops.CharmBase):
             # TODO: handle push notifications, add TAKAHE_VAPID_PUBLIC_KEY and TAKAHE_VAPID_PRIVATE_KEY
             # TODO: consider others: https://docs.jointakahe.org/en/latest/tuning/
         }
-        if self.config["media-uri"] == "local://":
+        if media_uri == "local://":
             env["TAKAHE_MEDIA_ROOT"] = str(self.model.storages["local-media"][0].location)
             # This must be https:// something.
             env[
